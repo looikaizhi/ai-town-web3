@@ -30,3 +30,14 @@ export function ponderUrl(): string | undefined {
 export function keeperEnabled(): boolean {
   return process.env.TRUMANTOWN_KEEPER === '1';
 }
+/** 所有经济活跃的 agent ID 列表（逗号分隔，默认只有 "0"）。 */
+export function agentIds(): string[] {
+  return (process.env.AGENT_IDS ?? DEFAULT_ECON_AGENT_ID)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+/** 指定 agent 的 EOA 地址（从环境变量 AGENT_N_EOA 读取）。 */
+export function agentEoaForId(id: string): string {
+  return process.env[`AGENT_${id}_EOA`] ?? '';
+}

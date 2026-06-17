@@ -75,3 +75,41 @@ export const upsertAgentEconomy = internalMutation({
     }
   },
 });
+
+/**
+ * 返回默认 world 里所有 agents（按 index 顺序）。
+ * 每个 agent 的 index 对应其 econAgentId（agents[0] → "0"，agents[1] → "1"，...）。
+ */
+export const getAllWorldAgents = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const status = await ctx.db
+      .query('worldStatus')
+      .filter((q) => q.eq(q.field('isDefault'), true))
+      .first();
+    if (!status) return null;
+    const world = await ctx.db.get(status.worldId);
+    if (!world) return null;
+    return {
+      worldId: status.worldId,
+      agents: world.agents.map((a, i) => ({
+        agentId: a.id,
+        econAgentId: String(i),
+      })),
+    };
+  },
+});
+
+/**
+ * 按 econAgentId（如 "1"、"2"）查 agentEconomy 行。
+ * 用于多 agent tick：每个 agent 独立查自己的经济状态。
+ */
+export const getAgentEconomyByEconId = internalQuery({
+  args: { worldId: v.id('worlds'), econAgentId: v.string() },
+  handler: async (ctx, { worldId, econAgentId }) => {
+    return await ctx.db
+      .query('agentEconomy')
+      .withIndex('econAgentId', (q) => q.eq('worldId', worldId).eq('econAgentId', econAgentId))
+      .first();
+  },
+});

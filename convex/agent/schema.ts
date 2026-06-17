@@ -27,6 +27,12 @@ export const memoryFields = {
       type: v.literal('reflection'),
       relatedMemoryIds: v.array(v.id('memories')),
     }),
+    v.object({
+      type: v.literal('whisper'),
+      // The human (wallet) who paid to whisper, and the atomic-USDC amount paid.
+      sender: v.string(),
+      amount: v.string(),
+    }),
   ),
 };
 export const memoryTables = {

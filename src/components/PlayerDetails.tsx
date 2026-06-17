@@ -9,6 +9,9 @@ import { useSendInput } from '../hooks/sendInput';
 import { Player } from '../../convex/aiTown/player';
 import { GameId } from '../../convex/aiTown/ids';
 import { ServerGame } from '../hooks/serverGame';
+import { TradePanel } from './economy/TradePanel';
+import { WhisperPanel } from './economy/WhisperPanel';
+import { RivalryPanel } from './economy/RivalryPanel';
 
 export default function PlayerDetails({
   worldId,
@@ -47,6 +50,13 @@ export default function PlayerDetails({
   );
 
   const playerDescription = playerId && game.playerDescriptions.get(playerId);
+
+  // 获取选中居民的 econAgentId：world.agents 的 index 就是 econAgentId
+  const agents = [...game.world.agents.values()];
+  const selectedAgent = player ? agents.find((a) => a.playerId === player.id) : undefined;
+  const selectedEconAgentId = selectedAgent
+    ? String(agents.indexOf(selectedAgent))
+    : '0';
 
   const startConversation = useSendInput(engineId, 'startConversation');
   const acceptInvite = useSendInput(engineId, 'acceptInvite');
@@ -233,6 +243,9 @@ export default function PlayerDetails({
           )}
         </p>
       </div>
+      {!isMe && <TradePanel agentId={selectedEconAgentId} />}
+      {!isMe && <WhisperPanel agentId={selectedEconAgentId} />}
+      {!isMe && <RivalryPanel agentId={selectedEconAgentId} />}
       {!isMe && playerConversation && playerStatus?.kind === 'participating' && (
         <Messages
           worldId={worldId}

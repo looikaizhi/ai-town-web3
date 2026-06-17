@@ -14,6 +14,8 @@ import { DebugPath } from './DebugPath.tsx';
 import { PositionIndicator } from './PositionIndicator.tsx';
 import { SHOW_DEBUG_UI } from './Game.tsx';
 import { ServerGame } from '../hooks/serverGame.ts';
+import { usePonderAgent } from '../web3/usePonderAgent.ts';
+import { economyToGauge, type GaugeView } from '../web3/gauge.ts';
 
 export const PixiGame = (props: {
   worldId: Id<'worlds'>;
@@ -33,12 +35,42 @@ export const PixiGame = (props: {
     (p) => p.human === humanTokenIdentifier,
   )?.id;
 
+  // SP5: all-agent economy gauge data — one gauge per resident.
+  const allStatuses = useQuery(api.economy.public.getAllAgentStatuses) ?? [];
+  const { data: standing0 } = usePonderAgent('0');
+  const { data: standing1 } = usePonderAgent('1');
+  const { data: standing2 } = usePonderAgent('2');
+  const { data: standing3 } = usePonderAgent('3');
+  const { data: standing4 } = usePonderAgent('4');
+  const standingByEconId: Record<string, typeof standing0> = {
+    '0': standing0, '1': standing1, '2': standing2, '3': standing3, '4': standing4,
+  };
+
+  // Build a map: playerId -> GaugeView using economy rows + Ponder standing
+  const gaugeMap = new Map<string, GaugeView>();
+  for (const status of allStatuses) {
+    const playerEntry = [...props.game.world.agents.values()].find(
+      (a) => a.id === status.playerId,
+    );
+    if (!playerEntry) continue;
+    const standing = standingByEconId[status.econAgentId];
+    const marketCap = BigInt(standing?.marketCap || '0');
+    const alive = standing?.alive ?? true;
+    gaugeMap.set(playerEntry.playerId, economyToGauge({
+      status: status.status,
+      energy: status.energy,
+      starvingPeriods: status.starvingPeriods,
+      recoveryWindow: status.recoveryWindow,
+      marketCap,
+      alive,
+    }));
+  }
+
   const moveTo = useSendInput(props.engineId, 'moveTo');
 
   // Interaction for clicking on the world to navigate.
   const dragStart = useRef<{ screenX: number; screenY: number } | null>(null);
   const onMapPointerDown = (e: any) => {
-    // https://pixijs.download/dev/docs/PIXI.FederatedPointerEvent.html
     dragStart.current = { screenX: e.screenX, screenY: e.screenY };
   };
 
@@ -82,7 +114,7 @@ export const PixiGame = (props: {
   const { width, height, tileDim } = props.game.worldMap;
   const players = [...props.game.world.players.values()];
 
-  // Zoom on the user’s avatar when it is created
+  // Zoom on the user's avatar when it is created
   useEffect(() => {
     if (!viewportRef.current || humanPlayerId === undefined) return;
 
@@ -109,7 +141,6 @@ export const PixiGame = (props: {
       />
       {players.map(
         (p) =>
-          // Only show the path for the human player in non-debug mode.
           (SHOW_DEBUG_UI || p.id === humanPlayerId) && (
             <DebugPath key={`path-${p.id}`} player={p} tileDim={tileDim} />
           ),
@@ -123,6 +154,7 @@ export const PixiGame = (props: {
           isViewer={p.id === humanPlayerId}
           onClick={props.setSelectedElement}
           historicalTime={props.historicalTime}
+          gauge={gaugeMap.get(p.id)}
         />
       ))}
     </PixiViewport>

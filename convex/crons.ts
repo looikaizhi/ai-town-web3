@@ -1,6 +1,8 @@
 import { cronJobs } from 'convex/server';
 import { DELETE_BATCH_SIZE, IDLE_WORLD_TIMEOUT, VACUUM_MAX_AGE } from './constants';
 import { ECONOMIC_TICK_SECONDS } from './economy/constants';
+import { WHISPER_TICK_SECONDS } from './interaction/constants';
+import { RIVALRY_TICK_SECONDS } from './rivalry/constants';
 import { internal } from './_generated/api';
 import { internalMutation } from './_generated/server';
 import { TableNames } from './_generated/dataModel';
@@ -20,6 +22,18 @@ crons.interval(
   'economic tick',
   { seconds: ECONOMIC_TICK_SECONDS },
   internal.economy.tick.runEconomicTick,
+);
+
+crons.interval(
+  'whisper tick',
+  { seconds: WHISPER_TICK_SECONDS },
+  internal.interaction.tick.runWhisperTick,
+);
+
+crons.interval(
+  'rivalry tick',
+  { seconds: RIVALRY_TICK_SECONDS },
+  internal.rivalry.tick.runRivalryTick,
 );
 
 crons.daily('vacuum old entries', { hourUTC: 4, minuteUTC: 20 }, internal.crons.vacuumOldEntries);

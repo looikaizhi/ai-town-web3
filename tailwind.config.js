@@ -24,6 +24,11 @@ module.exports = {
           700: '#3A4466',
           900: '#181425',
         },
+        // SP2 semantic action colors
+        buy: '#22C55E',
+        sell: '#DC2626',
+        info: '#2563EB',
+        gold: '#EAB308',
       },
     },
   },

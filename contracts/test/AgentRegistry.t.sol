@@ -41,7 +41,7 @@ contract AgentRegistryTest is Test {
         reg.markDead(id);
         vm.prank(keeper);
         reg.markDead(id);
-        (, , , , , bool alive) = reg.agents(id);
+        (,,,,, bool alive) = reg.agents(id);
         assertFalse(alive);
     }
 

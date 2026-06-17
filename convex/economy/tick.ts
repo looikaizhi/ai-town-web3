@@ -13,8 +13,8 @@ import {
   executorUrl,
   ponderUrl,
   keeperEnabled,
-  defaultAgentId,
-  agentEoa,
+  agentIds,
+  agentEoaForId,
 } from './constants';
 
 /**
@@ -38,79 +38,87 @@ export const runEconomicTick = internalAction({
 export async function runEconomicTickHandler(ctx: any): Promise<void> {
   if (!economyEnabled()) return;
 
-  const wa = await ctx.runQuery(internal.economy.perception.getDefaultWorldAgent, {});
-  if (!wa) return;
+  const worldData = await ctx.runQuery(internal.economy.perception.getAllWorldAgents, {});
+  if (!worldData) return;
 
-  const econAgentId = defaultAgentId();
-  const eoa = agentEoa() ?? '';
+  const { worldId, agents } = worldData;
+  const ids = agentIds(); // e.g. ["0","1","2","3","4"]
   const executor = createExecutorClient(executorUrl());
-
-  // USDC balances (energy) — LIVE chain truth, not Ponder.
-  let balances;
-  try {
-    balances = await executor.balances(econAgentId);
-  } catch (e) {
-    console.error('[economy] balances unavailable, skipping tick', e);
-    return;
-  }
-
-  // Standing + life params — Ponder when configured, else env/constants mirror.
   const purl = ponderUrl();
-  const standing = purl ? await createPonderClient(purl).agentStanding(econAgentId) : null;
-  const params = resolveEconomyParams(standing, {
-    costPerThink: process.env.COST_PER_THINK ?? COST_PER_THINK,
-    floor: process.env.STANDING_FLOOR ?? STANDING_FLOOR,
-    recoveryWindow: Number(process.env.RECOVERY_WINDOW ?? RECOVERY_WINDOW),
-  });
 
-  // Standing prefers Ponder marketCap; fall back to the live executor marketCap.
-  const standingMarketCap = standing ? params.marketCap : BigInt(balances.marketCap);
+  for (const econAgentId of ids) {
+    const agentIndex = parseInt(econAgentId, 10);
+    const agentEntry = agents[agentIndex];
+    if (!agentEntry) {
+      console.warn(`[economy] no ai-town agent at index ${agentIndex}, skipping`);
+      continue;
+    }
 
-  const energy = computeEnergy(BigInt(balances.eoaUsdc), params.costPerThink);
-  const dying = isDying(energy, standingMarketCap, params.floor);
+    const eoa = agentEoaForId(econAgentId);
 
-  const prevRow = await ctx.runQuery(internal.economy.perception.getAgentEconomy, {
-    worldId: wa.worldId,
-    agentId: wa.agentId,
-  });
-  const prevState: SurvivalState = prevRow
-    ? {
-        status: prevRow.status,
-        starvingPeriods: prevRow.starvingPeriods,
-        starvingSince: prevRow.starvingSince,
-        diedAt: prevRow.diedAt,
+    try {
+      // USDC balances (energy) — LIVE chain truth
+      const balances = await executor.balances(econAgentId);
+
+      // Standing + life params
+      const standing = purl ? await createPonderClient(purl).agentStanding(econAgentId) : null;
+      const params = resolveEconomyParams(standing, {
+        costPerThink: process.env.COST_PER_THINK ?? COST_PER_THINK,
+        floor: process.env.STANDING_FLOOR ?? STANDING_FLOOR,
+        recoveryWindow: Number(process.env.RECOVERY_WINDOW ?? RECOVERY_WINDOW),
+      });
+
+      const standingMarketCap = standing ? params.marketCap : BigInt(balances.marketCap);
+      const energy = computeEnergy(BigInt(balances.eoaUsdc), params.costPerThink);
+      const dying = isDying(energy, standingMarketCap, params.floor);
+
+      const prevRow = await ctx.runQuery(internal.economy.perception.getAgentEconomyByEconId, {
+        worldId,
+        econAgentId,
+      });
+      const prevState: SurvivalState = prevRow
+        ? {
+            status: prevRow.status,
+            starvingPeriods: prevRow.starvingPeriods,
+            starvingSince: prevRow.starvingSince,
+            diedAt: prevRow.diedAt,
+          }
+        : { status: 'alive', starvingPeriods: 0 };
+
+      const now = Date.now();
+      const next = advanceSurvival(prevState, dying, now, params.recoveryWindow);
+
+      await ctx.runMutation(internal.economy.perception.upsertAgentEconomy, {
+        worldId,
+        agentId: agentEntry.agentId,
+        econAgentId,
+        eoa,
+        eoaUsdc: balances.eoaUsdc,
+        smartUsdc: balances.smartUsdc,
+        tokenBalance: standing ? params.tokenBalance.toString() : balances.tokenBalance,
+        marketCap: standingMarketCap.toString(),
+        energy,
+        lastPerceivedAt: now,
+        status: next.status,
+        starvingPeriods: next.starvingPeriods,
+        starvingSince: next.starvingSince,
+        diedAt: next.diedAt,
+      });
+
+      if (next.status === 'dead' && prevState.status !== 'dead') {
+        console.log(`[economy] agent ${econAgentId} DIED`);
+        if (keeperEnabled()) {
+          try {
+            const tx = await executor.markDead(econAgentId);
+            console.log(`[economy] keeper markDead(${econAgentId}) -> ${tx}`);
+          } catch (e) {
+            console.error(`[economy] keeper markDead(${econAgentId}) failed`, e);
+          }
+        }
       }
-    : { status: 'alive', starvingPeriods: 0 };
-
-  const now = Date.now();
-  const next = advanceSurvival(prevState, dying, now, params.recoveryWindow);
-
-  await ctx.runMutation(internal.economy.perception.upsertAgentEconomy, {
-    worldId: wa.worldId,
-    agentId: wa.agentId,
-    econAgentId,
-    eoa,
-    eoaUsdc: balances.eoaUsdc,
-    smartUsdc: balances.smartUsdc,
-    tokenBalance: standing ? params.tokenBalance.toString() : balances.tokenBalance,
-    marketCap: standingMarketCap.toString(),
-    energy,
-    lastPerceivedAt: now,
-    status: next.status,
-    starvingPeriods: next.starvingPeriods,
-    starvingSince: next.starvingSince,
-    diedAt: next.diedAt,
-  });
-
-  if (next.status === 'dead' && prevState.status !== 'dead') {
-    console.log(`[economy] agent ${econAgentId} DIED (starved ${next.starvingPeriods} periods)`);
-    if (keeperEnabled()) {
-      try {
-        const tx = await executor.markDead(econAgentId);
-        console.log(`[economy] keeper markDead(${econAgentId}) -> ${tx}`);
-      } catch (e) {
-        console.error('[economy] keeper markDead failed (will retry next death transition)', e);
-      }
+    } catch (e) {
+      // 单个 agent 失败不影响其他 agent
+      console.error(`[economy] tick failed for agent ${econAgentId}`, e);
     }
   }
 }

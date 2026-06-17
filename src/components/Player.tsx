@@ -10,6 +10,8 @@ import { useHistoricalValue } from '../hooks/useHistoricalValue.ts';
 import { PlayerDescription } from '../../convex/aiTown/playerDescription.ts';
 import { WorldMap } from '../../convex/aiTown/worldMap.ts';
 import { ServerGame } from '../hooks/serverGame.ts';
+import { AgentGauge } from './economy/AgentGauge.tsx';
+import type { GaugeView } from '../web3/gauge.ts';
 
 export type SelectElement = (element?: { kind: 'player'; id: GameId<'players'> }) => void;
 
@@ -21,13 +23,14 @@ export const Player = ({
   player,
   onClick,
   historicalTime,
+  gauge,
 }: {
   game: ServerGame;
   isViewer: boolean;
   player: ServerPlayer;
-
   onClick: SelectElement;
   historicalTime?: number;
+  gauge?: GaugeView;
 }) => {
   const playerCharacter = game.playerDescriptions.get(player.id)?.character;
   if (!playerCharacter) {
@@ -86,6 +89,13 @@ export const Player = ({
           onClick({ kind: 'player', id: player.id });
         }}
       />
+      {gauge && (
+        <AgentGauge
+          x={historicalLocation.x * tileDim + tileDim / 2}
+          y={historicalLocation.y * tileDim + tileDim / 2}
+          view={gauge}
+        />
+      )}
     </>
   );
 };

@@ -10,12 +10,13 @@ export interface GatewayDeps {
   facilitator: Facilitator;
   queue: SettlementQueue;
   ollamaUpstream: string;
+  upstreamApiKey?: string;
   defaultAgentId: string;
 }
 
 export function createGateway(deps: GatewayDeps): Express {
   const app = express();
-  const proxy = makeProxy(deps.ollamaUpstream);
+  const proxy = makeProxy(deps.ollamaUpstream, deps.upstreamApiKey);
 
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
 

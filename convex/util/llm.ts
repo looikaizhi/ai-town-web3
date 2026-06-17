@@ -247,7 +247,8 @@ export async function fetchEmbeddingBatch(texts: string[]) {
     retries,
     ms,
   } = await retryWithBackoff(async () => {
-    const result = await fetch(config.url + '/v1/embeddings', {
+    const embeddingBase2 = process.env.OLLAMA_EMBEDDING_HOST ?? config.url;
+    const result = await fetch(embeddingBase2 + '/v1/embeddings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -717,8 +718,11 @@ export class ChatCompletionContent {
 
 export async function ollamaFetchEmbedding(text: string) {
   const config = getLLMConfig();
+  // OLLAMA_EMBEDDING_HOST lets embeddings bypass the gateway and go directly to Ollama
+  // (needed when OLLAMA_HOST points to the x402 gateway which doesn't serve /api/embeddings)
+  const embeddingBase = process.env.OLLAMA_EMBEDDING_HOST ?? config.url;
   const { result } = await retryWithBackoff(async () => {
-    const resp = await fetch(config.url + '/api/embeddings', {
+    const resp = await fetch(embeddingBase + '/api/embeddings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

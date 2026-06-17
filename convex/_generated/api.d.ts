@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as __mocks____generated_server from "../__mocks__/_generated/server.js";
 import type * as agent_conversation from "../agent/conversation.js";
 import type * as agent_embeddingsCache from "../agent/embeddingsCache.js";
 import type * as agent_memory from "../agent/memory.js";
@@ -43,6 +44,7 @@ import type * as economy_goalStack from "../economy/goalStack.js";
 import type * as economy_payment from "../economy/payment.js";
 import type * as economy_perception from "../economy/perception.js";
 import type * as economy_ponderClient from "../economy/ponderClient.js";
+import type * as economy_public from "../economy/public.js";
 import type * as economy_registry from "../economy/registry.js";
 import type * as economy_survival from "../economy/survival.js";
 import type * as economy_tick from "../economy/tick.js";
@@ -51,8 +53,19 @@ import type * as engine_abstractGame from "../engine/abstractGame.js";
 import type * as engine_historicalObject from "../engine/historicalObject.js";
 import type * as http from "../http.js";
 import type * as init from "../init.js";
+import type * as interaction_constants from "../interaction/constants.js";
+import type * as interaction_prompt from "../interaction/prompt.js";
+import type * as interaction_quadratic from "../interaction/quadratic.js";
+import type * as interaction_tick from "../interaction/tick.js";
+import type * as interaction_twab from "../interaction/twab.js";
+import type * as interaction_whispers from "../interaction/whispers.js";
 import type * as messages from "../messages.js";
 import type * as music from "../music.js";
+import type * as rivalry_constants from "../rivalry/constants.js";
+import type * as rivalry_intent from "../rivalry/intent.js";
+import type * as rivalry_prompt from "../rivalry/prompt.js";
+import type * as rivalry_rivals from "../rivalry/rivals.js";
+import type * as rivalry_tick from "../rivalry/tick.js";
 import type * as testing from "../testing.js";
 import type * as util_FastIntegerCompression from "../util/FastIntegerCompression.js";
 import type * as util_assertNever from "../util/assertNever.js";
@@ -77,6 +90,7 @@ import type * as world from "../world.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "__mocks__/_generated/server": typeof __mocks____generated_server;
   "agent/conversation": typeof agent_conversation;
   "agent/embeddingsCache": typeof agent_embeddingsCache;
   "agent/memory": typeof agent_memory;
@@ -107,6 +121,7 @@ declare const fullApi: ApiFromModules<{
   "economy/payment": typeof economy_payment;
   "economy/perception": typeof economy_perception;
   "economy/ponderClient": typeof economy_ponderClient;
+  "economy/public": typeof economy_public;
   "economy/registry": typeof economy_registry;
   "economy/survival": typeof economy_survival;
   "economy/tick": typeof economy_tick;
@@ -115,8 +130,19 @@ declare const fullApi: ApiFromModules<{
   "engine/historicalObject": typeof engine_historicalObject;
   http: typeof http;
   init: typeof init;
+  "interaction/constants": typeof interaction_constants;
+  "interaction/prompt": typeof interaction_prompt;
+  "interaction/quadratic": typeof interaction_quadratic;
+  "interaction/tick": typeof interaction_tick;
+  "interaction/twab": typeof interaction_twab;
+  "interaction/whispers": typeof interaction_whispers;
   messages: typeof messages;
   music: typeof music;
+  "rivalry/constants": typeof rivalry_constants;
+  "rivalry/intent": typeof rivalry_intent;
+  "rivalry/prompt": typeof rivalry_prompt;
+  "rivalry/rivals": typeof rivalry_rivals;
+  "rivalry/tick": typeof rivalry_tick;
   testing: typeof testing;
   "util/FastIntegerCompression": typeof util_FastIntegerCompression;
   "util/assertNever": typeof util_assertNever;

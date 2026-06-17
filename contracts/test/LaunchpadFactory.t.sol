@@ -24,12 +24,11 @@ contract LaunchpadFactoryTest is Test {
     }
 
     function test_spawn_deploys_token_and_registers() public {
-        (uint256 id, address token) =
-            factory.spawnAgent("Alice Coin", "ALICE", wallet, 10_000, 5_000_000, 10);
+        (uint256 id, address token) = factory.spawnAgent("Alice Coin", "ALICE", wallet, 10_000, 5_000_000, 10);
         assertEq(id, 0);
         assertTrue(token != address(0));
         assertEq(address(AgentToken(token).usdc()), address(usdc));
-        (address t, address w, uint256 cost, , , bool alive) = reg.agents(id);
+        (address t, address w, uint256 cost,,, bool alive) = reg.agents(id);
         assertEq(t, token);
         assertEq(w, wallet);
         assertEq(cost, 10_000);

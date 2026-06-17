@@ -20,7 +20,13 @@ export function paymentMiddleware(deps: PaymentMiddlewareDeps): RequestHandler {
       return;
     }
 
-    const resource = `${req.protocol}://${req.get('host') ?? 'gateway'}${req.originalUrl}`;
+    // Use GATEWAY_EXTERNAL_URL if set — ensures the resource URL in the 402 challenge
+    // is stable regardless of which hostname the caller used (host.docker.internal vs
+    // 127.0.0.1 vs WSL IP). Facilitator verifies the signed resource matches exactly.
+    const externalBase = process.env.GATEWAY_EXTERNAL_URL?.replace(/\/$/, '');
+    const resource = externalBase
+      ? `${externalBase}${req.originalUrl}`
+      : `${req.protocol}://${req.get('host') ?? 'gateway'}${req.originalUrl}`;
     const requirements = buildPaymentRequirements(price, resource);
 
     const header = req.header('x-payment');

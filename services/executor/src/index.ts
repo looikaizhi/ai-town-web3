@@ -15,19 +15,24 @@ function env(name: string, fallback?: string): string {
 
 async function main() {
   const usdcAddress = env('USDC_ADDRESS', '0x036CbD53842c5426634e7929541eC2318f3dCF7e');
-  const agent0: AgentConfig = {
-    agentId: '0',
-    smartAccount: env('AGENT_0_SMART_ACCOUNT'),
-    eoa: env('AGENT_0_EOA'),
-    token: env('AGENT_0_TOKEN'),
-  };
+  const agentIdList = (process.env.AGENT_IDS ?? '0').split(',').map((s) => s.trim()).filter(Boolean);
+
+  // 构建每个 agent 的配置
+  const agentConfigs: AgentConfig[] = agentIdList.map((id) => ({
+    agentId: id,
+    smartAccount: env(`AGENT_${id}_SMART_ACCOUNT`),
+    eoa: env(`AGENT_${id}_EOA`),
+    token: env(`AGENT_${id}_TOKEN`),
+  }));
+
+  const primaryAgent = agentConfigs[0];
 
   const cdp = await buildCdpHooks({
     apiKeyId: env('CDP_API_KEY_ID'),
     apiKeySecret: env('CDP_API_KEY_SECRET'),
     walletSecret: env('CDP_WALLET_SECRET'),
     rpcUrl: env('RPC_URL_BASE_SEPOLIA', 'https://sepolia.base.org'),
-    agents: [agent0],
+    agents: agentConfigs,
     usdcAddress,
   });
 
@@ -42,20 +47,26 @@ async function main() {
 
   const signer = createX402Signer({ accountFor: cdp.eoaAccountFor });
 
+  // allowedContracts: 所有 agent 代币 + USDC
+  const allTokens = agentConfigs.map((a) => a.token);
   const guardrails = {
     maxUsdcPerTx: BigInt(env('MAX_USDC_PER_TX', '5000000')),
-    allowedContracts: [agent0.token, usdcAddress],
+    allowedContracts: [...allTokens, usdcAddress],
   };
 
-  let resolve = staticAgentResolver({ '0': agent0 }, agent0);
+  // AgentResolver：静态 map（所有 agent）
+  const configMap: Record<string, AgentConfig> = {};
+  for (const cfg of agentConfigs) configMap[cfg.agentId] = cfg;
+
+  let resolve = staticAgentResolver(configMap, primaryAgent);
   if (process.env.EXECUTOR_USE_REGISTRY === '1') {
     const reg = createRegistryAgentResolver(
       viemRegistryAgentReader(
         env('RPC_URL_BASE_SEPOLIA', 'https://sepolia.base.org'),
         env('REGISTRY_ADDRESS'),
       ),
-      (id) => (id === agent0.agentId ? agent0.eoa : `0x`),
-      (process.env.AGENT_IDS ?? '0').split(',').map((s) => s.trim()).filter(Boolean),
+      (id) => configMap[id]?.eoa ?? '0x',
+      agentIdList,
     );
     await reg.refresh();
     reg.start(Number(process.env.REGISTRY_REFRESH_MS ?? '30000'));
@@ -78,6 +89,7 @@ async function main() {
   });
 
   const port = Number(env('PORT', '8404'));
+  console.log(`[executor] starting with agents: ${agentIdList.join(', ')}`);
   app.listen(port, () => console.log(`[executor] AgentKit/CDP on :${port}`));
 }
 

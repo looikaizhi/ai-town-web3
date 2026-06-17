@@ -5,6 +5,7 @@ import type { PaymentSigner } from './paymentSigner.js';
 import { GuardrailError, type GuardrailConfig } from './guardrails.js';
 import { signPaymentForAgent } from './signPayment.js';
 import { buyAction, sellAction, transferAction, type ActionsDeps } from './actions.js';
+import { buyRivalAction, sellRivalAction, type RivalActionsDeps } from './rivalActions.js';
 import { readBalances } from './balances.js';
 import { markDeadForAgent } from './keeper.js';
 
@@ -14,6 +15,7 @@ export interface ExecutorDeps {
   signer: PaymentSigner;
   guardrails: GuardrailConfig;
   usdcAddress: string;
+  interactionHubAddress?: string;
   markDead?: (agentId: string) => Promise<string>;
 }
 
@@ -52,6 +54,13 @@ export function createExecutor(deps: ExecutorDeps): express.Express {
     wallet: deps.wallet,
     guardrails: deps.guardrails,
     usdcAddress: deps.usdcAddress,
+  };
+
+  const rivalDeps: RivalActionsDeps = {
+    wallet: deps.wallet,
+    guardrails: deps.guardrails,
+    usdcAddress: deps.usdcAddress,
+    interactionHubAddress: deps.interactionHubAddress ?? '',
   };
 
   const mustResolve = (agentId: unknown) => {
@@ -155,6 +164,32 @@ export function createExecutor(deps: ExecutorDeps): express.Express {
     } catch (e) {
       fail(res, e);
     }
+  });
+
+  app.post('/actions/buy-rival', async (req: Request, res: Response) => {
+    try {
+      const cfg = mustResolve(req.body?.agentId);
+      if (typeof req.body?.rivalToken !== 'string') throw new HttpError(400, 'rivalToken required');
+      const out = await buyRivalAction(rivalDeps, cfg, {
+        rivalToken: req.body.rivalToken,
+        usdcIn: parseBig(req.body.usdcIn, 'usdcIn'),
+        minTokensOut: parseBig(req.body.minTokensOut ?? '0', 'minTokensOut'),
+      });
+      res.json(out);
+    } catch (e) { fail(res, e); }
+  });
+
+  app.post('/actions/sell-rival', async (req: Request, res: Response) => {
+    try {
+      const cfg = mustResolve(req.body?.agentId);
+      if (typeof req.body?.rivalToken !== 'string') throw new HttpError(400, 'rivalToken required');
+      const out = await sellRivalAction(rivalDeps, cfg, {
+        rivalToken: req.body.rivalToken,
+        tokensIn: parseBig(req.body.tokensIn, 'tokensIn'),
+        minUsdcOut: parseBig(req.body.minUsdcOut ?? '0', 'minUsdcOut'),
+      });
+      res.json(out);
+    } catch (e) { fail(res, e); }
   });
 
   app.get('/balances/:agentId', async (req: Request, res: Response) => {

@@ -9,6 +9,10 @@ import { GameId, conversationId, playerId } from '../aiTown/ids';
 import { NUM_MEMORIES_TO_SEARCH } from '../constants';
 import { buildSurvivalGoalStack, type SurvivalPerception } from '../economy/goalStack';
 import type { ChatCompletionOpts } from '../util/llm';
+import { twabTopK } from '../interaction/twab';
+import { whispersPrompt } from '../interaction/prompt';
+import { WHISPER_PROMPT_K, WHISPER_WINDOW_MS, ponderUrl } from '../interaction/constants';
+import { rivalryPrompt } from '../rivalry/prompt';
 
 const selfInternal = internal.agent.conversation;
 
@@ -19,7 +23,7 @@ export async function startConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, agent, otherAgent, lastConversation, economy } = await ctx.runQuery(
+  const { player, otherPlayer, agent, otherAgent, lastConversation, economy, whisperVoices, rivalVoices } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -55,6 +59,8 @@ export async function startConversationMessage(
     );
   }
   prompt.push(...survivalPrompt(economy));
+  prompt.push(...whispersPrompt(whisperVoices));
+  prompt.push(...rivalryPrompt(economy?.econAgentId ?? '0', rivalVoices));
   const lastPrompt = `${player.name} to ${otherPlayer.name}:`;
   prompt.push(lastPrompt);
 
@@ -88,7 +94,7 @@ export async function continueConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent, economy } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, economy, whisperVoices, rivalVoices } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -115,6 +121,8 @@ export async function continueConversationMessage(
     `DO NOT greet them again. Do NOT use the word "Hey" too often. Your response should be brief and within 200 characters.`,
   );
   prompt.push(...survivalPrompt(economy));
+  prompt.push(...whispersPrompt(whisperVoices));
+  prompt.push(...rivalryPrompt(economy?.econAgentId ?? '0', rivalVoices));
 
   const llmMessages: LLMMessage[] = [
     {
@@ -150,7 +158,7 @@ export async function leaveConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent, economy } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, economy, whisperVoices, rivalVoices } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -169,6 +177,8 @@ export async function leaveConversationMessage(
     `How would you like to tell them that you're leaving? Your response should be brief and within 200 characters.`,
   );
   prompt.push(...survivalPrompt(economy));
+  prompt.push(...whispersPrompt(whisperVoices));
+  prompt.push(...rivalryPrompt(economy?.econAgentId ?? '0', rivalVoices));
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
@@ -348,6 +358,43 @@ export const queryPromptData = internalQuery({
       .query('agentEconomy')
       .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('agentId', agent.id))
       .first();
+    let whisperVoices: { sender: string; text: string; weight: number }[] = [];
+    if (economy) {
+      const since = Date.now() - WHISPER_WINDOW_MS;
+      const rows = await ctx.db
+        .query('whispers')
+        .withIndex('agent_ts', (q) => q.eq('onchainAgentId', economy.econAgentId).gte('ts', since))
+        .collect();
+
+      // SP4: 从 Ponder 拉持币信任分（TWAB），用于加权排序
+      let holderScores: Record<string, number> = {};
+      const purl = ponderUrl();
+      if (purl) {
+        try {
+          const r = await fetch(`${purl}/agents/${economy.econAgentId}/holders`);
+          if (r.ok) {
+            const holders = (await r.json()) as Array<{ address: string; twabScore: number }>;
+            for (const h of holders) holderScores[h.address.toLowerCase()] = h.twabScore;
+          }
+        } catch {
+          // Ponder 不可达时降级：所有权重为 0（whisperVoices 将为空）
+        }
+      }
+
+      whisperVoices = twabTopK(
+        rows.map((r) => ({ sender: r.sender, text: r.text, ts: r.ts })),
+        holderScores,
+        WHISPER_PROMPT_K,
+      );
+    }
+    // SP4: 博弈感知快照（gate-off 时 rivalryState 为空数组，rivalryPrompt 返回 []，无副作用）
+    let rivalVoices: { rivalAgentId: string; marketCap: string; alive: boolean; allied: boolean }[] = [];
+    if (economy) {
+      rivalVoices = await ctx.db
+        .query('rivalryState')
+        .withIndex('agent_rival', (q) => q.eq('onchainAgentId', economy.econAgentId))
+        .collect();
+    }
     return {
       player: { name: playerDescription.name, ...player },
       otherPlayer: { name: otherPlayerDescription.name, ...otherPlayer },
@@ -360,6 +407,8 @@ export const queryPromptData = internalQuery({
       },
       lastConversation,
       economy,
+      whisperVoices,
+      rivalVoices,
     };
   },
 });

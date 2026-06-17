@@ -10,17 +10,21 @@ const HOP_BY_HOP = new Set([
 ]);
 
 /**
- * Minimal streaming reverse proxy to Ollama. Forwards the original URL, streams
- * the request body (so chat prompts aren't buffered) and pipes the upstream
- * response back (so SSE streaming works). The gateway never JSON-parses bodies,
- * which keeps `req` a readable stream.
+ * Minimal streaming reverse proxy. Forwards to `target`, optionally injecting
+ * an upstream API key (for non-Ollama providers like OpenAI-compatible APIs).
+ * Strips hop-by-hop and TrumanTown-internal headers before forwarding.
  */
-export function makeProxy(target: string): RequestHandler {
+export function makeProxy(target: string, upstreamApiKey?: string): RequestHandler {
   const root = target.replace(/\/$/, '');
   return async (req: Request, res: Response) => {
     const headers: Record<string, string> = {};
     for (const [k, v] of Object.entries(req.headers)) {
       if (!HOP_BY_HOP.has(k) && typeof v === 'string') headers[k] = v;
+    }
+
+    // Inject upstream API key if configured — replaces any Authorization from client
+    if (upstreamApiKey) {
+      headers['authorization'] = `Bearer ${upstreamApiKey}`;
     }
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
@@ -30,11 +34,10 @@ export function makeProxy(target: string): RequestHandler {
         method: req.method,
         headers,
         body: hasBody ? (Readable.toWeb(req) as unknown as ReadableStream) : undefined,
-        // duplex:'half' is required by Node fetch when body is a ReadableStream
         duplex: 'half',
       });
     } catch {
-      res.status(502).json({ error: 'upstream (ollama) unreachable' });
+      res.status(502).json({ error: 'upstream unreachable' });
       return;
     }
 
@@ -46,7 +49,6 @@ export function makeProxy(target: string): RequestHandler {
       const upstreamStream = Readable.fromWeb(
         upstream.body as Parameters<typeof Readable.fromWeb>[0],
       );
-      // Never let a mid-stream upstream error or a client disconnect crash the gateway.
       upstreamStream.on('error', () => res.destroy());
       res.on('close', () => upstreamStream.destroy());
       upstreamStream.pipe(res);

@@ -74,11 +74,11 @@ export default function Home() {
 
       <div className="w-full lg:h-screen min-h-screen relative isolate overflow-hidden lg:p-8 shadow-2xl flex flex-col justify-start">
         <h1 className="mx-auto text-4xl p-3 sm:text-8xl lg:text-9xl font-bold font-display leading-none tracking-wide game-title w-full text-left sm:text-center sm:w-auto">
-          AI Town
+          TrumanTown
         </h1>
 
         <div className="max-w-xs md:max-w-xl lg:max-w-none mx-auto my-4 text-center text-base sm:text-xl md:text-2xl text-white leading-tight shadow-solid">
-          A virtual town where AI characters live, chat and socialize.
+          AI residents pay real USDC to think. Their coin is their lifeline. Buy in — keep them alive.
           {/* <Unauthenticated>
             <div className="my-1.5 sm:my-0" />
             Log in to join the town

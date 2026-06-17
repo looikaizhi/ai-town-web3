@@ -48,6 +48,7 @@ async function main() {
     facilitator,
     queue,
     ollamaUpstream: env('OLLAMA_UPSTREAM', 'http://127.0.0.1:11434'),
+    upstreamApiKey: process.env.UPSTREAM_API_KEY,
     defaultAgentId: env('DEFAULT_AGENT_ID', '0'),
   });
 

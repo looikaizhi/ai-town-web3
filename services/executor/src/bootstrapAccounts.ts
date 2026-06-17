@@ -24,7 +24,7 @@ function env(name: string): string {
 }
 
 async function main() {
-  const agentId = process.env.AGENT_ID ?? '0';
+  const agentIds = (process.env.AGENT_IDS ?? process.env.AGENT_ID ?? '0').split(',').map(s => s.trim());
 
   const cdp = new CdpClient({
     apiKeyId: env('CDP_API_KEY_ID'),
@@ -32,21 +32,20 @@ async function main() {
     walletSecret: env('CDP_WALLET_SECRET'),
   });
 
-  const eoa = await cdp.evm.getOrCreateAccount({ name: agentEoaName(agentId) });
-  const smartAccount = await cdp.evm.getOrCreateSmartAccount({
-    name: agentSmartName(agentId),
-    owner: eoa as never,
-  });
-
-  const eoaAddress = (eoa as { address: string }).address;
-  const smartAddress = (smartAccount as { address: string }).address;
-
-  console.log(`\n[accounts] resident ${agentId} CDP accounts (get-or-create by name):`);
-  console.log(`  EOA   name=${agentEoaName(agentId)}   ${eoaAddress}`);
-  console.log(`  Smart name=${agentSmartName(agentId)} ${smartAddress}`);
-  console.log(`\nPaste into services/executor/.env:`);
-  console.log(`AGENT_${agentId}_EOA=${eoaAddress}`);
-  console.log(`AGENT_${agentId}_SMART_ACCOUNT=${smartAddress}\n`);
+  for (const agentId of agentIds) {
+    const eoa = await cdp.evm.getOrCreateAccount({ name: agentEoaName(agentId) });
+    const smartAccount = await cdp.evm.getOrCreateSmartAccount({
+      name: agentSmartName(agentId),
+      owner: eoa as never,
+    });
+    const eoaAddress = (eoa as { address: string }).address;
+    const smartAddress = (smartAccount as { address: string }).address;
+    console.log(`\n[accounts] resident ${agentId}:`);
+    console.log(`  EOA=${eoaAddress}`);
+    console.log(`  Smart=${smartAddress}`);
+    console.log(`AGENT_${agentId}_EOA=${eoaAddress}`);
+    console.log(`AGENT_${agentId}_SMART_ACCOUNT=${smartAddress}`);
+  }
 }
 
 main().catch((e) => {
